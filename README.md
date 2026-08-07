@@ -1,9 +1,9 @@
-# cinit
+cinit
 
-Custom init for Void Linux. Sinit-style C init + POSIX service scripts +
+Custom init for Linux. C init + POSIX service scripts +
 interactive installer.
 
-## Install
+Install
 
 ```sh
 git clone https://github.com/ok2345677/cinit
@@ -19,14 +19,14 @@ Installer asks:
 4. services to enable (space-separated, default: dbus seatd udevd)
 5. regenerate grub with init=/sbin/cinit
 
-## Files
+F  i l e s 
 
 - `cinit.c` — mounts /proc /sys /run /dev, swapon -a, loops rc.conf.
 - `install.sh` — POSIX sh interactive installer.
 - `etc/rc.conf` — SERVICES="hostname udevd seatd dbus network agetty chronyd crond sshd acpid".
 - `etc/rc.d/*` — 21 start/stop service scripts (POSIX sh).
 
-## Services
+Services
 
 acpid agetty avahi-daemon bluetoothd chronyd containerd crond cupsd dbus
 docker hostname iwd mysqld network nginx polkitd redis seatd smartd sshd udevd
