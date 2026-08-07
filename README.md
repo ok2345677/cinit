@@ -1,9 +1,9 @@
 cinit
 
-Custom init for Linux. C init + POSIX service scripts +
+init for Linux. C init + POSIX service scripts +
 interactive installer.
 
-Install
+ / \ I n s t a l l /  \
 
 ```sh
 git clone https://github.com/ok2345677/cinit
