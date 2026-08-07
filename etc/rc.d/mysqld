@@ -1,0 +1,9 @@
+#!/bin/sh
+case $1 in
+start)
+	[ ! -d /run/mysqld ] && mkdir -p /run/mysqld
+	chown mysql:mysql /run/mysqld
+	mysqld --user=mysql &
+	;;
+stop) pkill mysqld ;;
+esac

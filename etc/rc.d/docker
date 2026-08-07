@@ -1,0 +1,12 @@
+#!/bin/sh
+case $1 in
+start)
+	modprobe -q loop
+	/etc/rc.d/containerd start
+	dockerd >/dev/null 2>&1 &
+	;;
+stop)
+	pkill dockerd
+	pkill containerd
+	;;
+esac

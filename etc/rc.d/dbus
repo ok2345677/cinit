@@ -1,0 +1,9 @@
+#!/bin/sh
+case $1 in
+start)
+	mkdir -p /run/dbus
+	chown 22:22 /run/dbus
+	/usr/bin/dbus-daemon --system --nofork --nopidfile &
+	;;
+stop) pkill dbus-daemon ;;
+esac

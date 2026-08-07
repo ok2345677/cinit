@@ -1,0 +1,5 @@
+#!/bin/sh
+case $1 in
+start) cupsd -f & ;;
+stop) pkill cupsd ;;
+esac

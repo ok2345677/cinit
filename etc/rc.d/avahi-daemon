@@ -1,0 +1,5 @@
+#!/bin/sh
+case $1 in
+start) avahi-daemon -s & ;;
+stop) pkill avahi-daemon ;;
+esac

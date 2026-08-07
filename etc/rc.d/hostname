@@ -1,0 +1,8 @@
+#!/bin/sh
+case $1 in
+start)
+	cat /etc/hostname > /proc/sys/kernel/hostname
+	echo '0 2147483647' > /proc/sys/net/ipv4/ping_group_range
+	;;
+stop) ;;
+esac
