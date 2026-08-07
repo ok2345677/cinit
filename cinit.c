@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
 #include <sys/reboot.h>
@@ -9,9 +10,49 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#define MAXSVC 32
+#define NAMLEN 64
+
+static char svc[MAXSVC][NAMLEN];
+static pid_t pid[MAXSVC];
+static int nsvc;
+
 #define M(s,t,f,fl,d) if (mount(s,t,f,fl,d)<0) fprintf(stderr,"cinit: %s: %s\n",t,strerror(errno))
 static void halt(int r) { sync(); reboot(r ? RB_AUTOBOOT : RB_POWER_OFF); for (;;) pause(); }
 static void onsig(int s) { halt(s == SIGINT); }
+
+static void readconf(void)
+{
+	FILE *f = fopen("/etc/rc.conf", "r");
+	char line[256];
+	if (!f) return;
+	while (fgets(line, sizeof line, f)) {
+		char *p = strstr(line, "SERVICES=");
+		if (!p) continue;
+		p += 9;
+		if (*p == '"' || *p == '\'') p++;
+		char *tok = strtok(p, " \t\"'\n");
+		while (tok && nsvc < MAXSVC) {
+			strncpy(svc[nsvc++], tok, NAMLEN-1);
+			tok = strtok(NULL, " \t\"'\n");
+		}
+		break;
+	}
+	fclose(f);
+}
+
+static void spawn(int i)
+{
+	char path[NAMLEN+12];
+	pid_t p = fork();
+	if (!p) {
+		snprintf(path, sizeof path, "/etc/rc.d/%s", svc[i]);
+		execl("/bin/sh", "sh", path, "start", NULL);
+		_exit(127);
+	}
+	pid[i] = p;
+}
+
 int main(void)
 {
 	signal(SIGINT, onsig), signal(SIGUSR1, onsig), signal(SIGTERM, onsig);
@@ -26,11 +67,22 @@ int main(void)
 	M("tmpfs", "/tmp", "tmpfs", MS_NOSUID|MS_NODEV, 0);
 	M("/dev/sda1", "/boot/efi", "vfat", 0, 0);
 	{ pid_t p = fork(); if (!p) { execl("/usr/bin/swapon","swapon","-a",NULL); _exit(127); } while (waitpid(p,NULL,0)<0&&errno==EINTR); }
+	readconf();
+	for (int i = 0; i < nsvc; i++) spawn(i);
 	for (;;) {
-		pid_t p = fork();
-		if (!p) { execl("/bin/sh", "/bin/sh", "/etc/rc.conf", NULL); _exit(127); }
-		while (waitpid(p, NULL, 0) < 0 && errno == EINTR);
-		fprintf(stderr, "cinit: rc.conf exited, restarting\n");
-		sleep(1);
+		int st;
+		pid_t p = waitpid(-1, &st, 0);
+		if (p <= 0) { if (errno == EINTR) continue; sleep(1); continue; }
+		for (int i = 0; i < nsvc; i++) if (pid[i] == p) {
+			if (WIFEXITED(st) && WEXITSTATUS(st) == 0) {
+				fprintf(stderr, "cinit: %s done\n", svc[i]);
+				pid[i] = 0;
+			} else {
+				fprintf(stderr, "cinit: %s died, restarting\n", svc[i]);
+				sleep(1);
+				spawn(i);
+			}
+			break;
+		}
 	}
 }

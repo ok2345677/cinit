@@ -1,5 +1,5 @@
 #!/bin/sh
 case $1 in
-start) /usr/lib/polkit-1/polkitd --no-debug & ;;
+start) exec /usr/lib/polkit-1/polkitd --no-debug ;;
 stop) pkill polkitd ;;
 esac

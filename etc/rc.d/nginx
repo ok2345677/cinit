@@ -1,5 +1,5 @@
 #!/bin/sh
 case $1 in
-start) nginx -g 'daemon off;' & ;;
+start) exec nginx -g 'daemon off;' ;;
 stop) pkill nginx ;;
 esac

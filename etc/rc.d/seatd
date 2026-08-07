@@ -1,6 +1,5 @@
 #!/bin/sh
 case $1 in
-start) /usr/bin/seatd &
-	;;
+start) exec /usr/bin/seatd ;;
 stop) pkill seatd ;;
 esac

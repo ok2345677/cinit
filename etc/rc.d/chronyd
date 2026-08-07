@@ -2,7 +2,7 @@
 case $1 in
 start)
 	install -d -m750 -o chrony -g chrony /var/run/chrony
-	chronyd -n -u chrony &
+	exec chronyd -n -u chrony
 	;;
 stop) pkill chronyd ;;
 esac

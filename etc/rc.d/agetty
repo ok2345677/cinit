@@ -3,8 +3,8 @@ case $1 in
 start)
 	mkdir -p /run/user/1000
 	chown 1000:1000 /run/user/1000 && chmod 0700 /run/user/1000
-	( while :; do /usr/bin/agetty --noclear tty1 38400 linux || sleep 1; done ) &
 	( while :; do /usr/bin/agetty --noclear tty2 38400 linux || sleep 1; done ) &
+	exec /bin/sh -c 'while :; do /usr/bin/agetty --noclear tty1 38400 linux || sleep 1; done'
 	;;
 stop) pkill agetty ;;
 esac

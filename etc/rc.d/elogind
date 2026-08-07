@@ -1,5 +1,12 @@
 #!/bin/sh
 case $1 in
-start) /usr/libexec/elogind/elogind.wrapper & ;;
+start)
+	i=0
+	while [ ! -S /run/dbus/system_bus_socket ] && [ $i -lt 50 ]; do
+		i=$((i+1))
+		sleep 0.1
+	done
+	exec /usr/libexec/elogind/elogind.wrapper
+	;;
 stop) pkill elogind ;;
 esac

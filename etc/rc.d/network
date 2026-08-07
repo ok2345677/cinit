@@ -5,7 +5,7 @@ start)
 	for i in /sys/class/net/*; do
 		[ "${i##*/}" = lo ] || /usr/bin/ip link set "${i##*/}" up
 	done
-	/usr/local/sbin/sdhcp -d enp3s0 &
+	exec /usr/local/sbin/sdhcp -d enp3s0
 	;;
 stop) pkill sdhcp ;;
 esac

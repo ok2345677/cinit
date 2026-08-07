@@ -1,8 +1,5 @@
 #!/bin/sh
 case $1 in
-start)
-	modprobe overlay 2>/dev/null
-	containerd &
-	;;
+start) exec containerd ;;
 stop) pkill containerd ;;
 esac

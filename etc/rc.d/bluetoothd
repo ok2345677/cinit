@@ -1,7 +1,5 @@
 #!/bin/sh
 case $1 in
-start)
-	/usr/libexec/bluetooth/bluetoothd -n &
-	;;
+start) exec /usr/libexec/bluetooth/bluetoothd -n ;;
 stop) pkill bluetoothd ;;
 esac

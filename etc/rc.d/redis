@@ -2,7 +2,7 @@
 case $1 in
 start)
 	install -d -m0750 -o redis -g redis /run/redis
-	redis-server /etc/redis/redis.conf &
+	exec redis-server /etc/redis/redis.conf
 	;;
 stop) pkill redis-server ;;
 esac
