@@ -4,7 +4,7 @@ set -u
 
 SELF="$0"
 SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-CC=${CC:-cc}
+CC=${CC:-}
 CFLAGS=${CFLAGS:--O2 -s -static}
 CONF=/etc/rc.conf
 RCD=/etc/rc.d
@@ -18,15 +18,25 @@ ask() { printf '%s [%s]: ' "$1" "$2" >&2; read -r ans; echo "${ans:-$2}"; }
 
 say "cinit installer in $SELF_DIR"
 
-# 1. build
+# 1. pick compiler
+defcc=$(command -v gcc >/dev/null 2>&1 && echo gcc || echo cc)
+cc=$(ask "which compiler to choose?" "$defcc")
+case "$cc" in
+	gcc|clang|cc) ;;
+	*) die "unknown compiler: $cc" ;;
+esac
+command -v "$cc" >/dev/null 2>&1 || die "compiler '$cc' not found"
+say "compiler: $cc"
+
+# 2. build
 ans=$(ask "build cinit from source?" "yes")
 if [ "$ans" = "yes" ] || [ "$ans" = "y" ]; then
-	$CC $CFLAGS -o "$SELF_DIR/cinit" "$SELF_DIR/cinit.c" \
+	$cc $CFLAGS -o "$SELF_DIR/cinit" "$SELF_DIR/cinit.c" \
 		|| die "build failed"
 	say "built: $SELF_DIR/cinit"
 fi
 
-# 2. install binary
+# 3. install binary
 ans=$(ask "install binary as $INIT (and /sbin/init)?" "yes")
 if [ "$ans" = "yes" ] || [ "$ans" = "y" ]; then
 	install -m755 "$SELF_DIR/cinit" "$INIT" || die "cannot install $INIT"
@@ -34,7 +44,7 @@ if [ "$ans" = "yes" ] || [ "$ans" = "y" ]; then
 	say "installed $INIT, /sbin/init -> cinit"
 fi
 
-# 3. pick services
+# 4. pick services
 echo
 echo "available services in $SELF_DIR/etc/rc.d:"
 printf '  '
@@ -48,21 +58,21 @@ for s in $svc; do
 done
 say "will start: $svc"
 
-# 4. write /etc/rc.conf
+# 5. write /etc/rc.conf
 tmp=$(mktemp) || die "mktemp failed"
 printf '#!/bin/sh\nSERVICES="%s"\nfor svc in $SERVICES; do\n\t/etc/rc.d/$svc start\ndone\n' "$svc" > "$tmp"
 install -m755 "$tmp" "$CONF"
 rm -f "$tmp"
 say "wrote $CONF: SERVICES=\"$svc\""
 
-# 5. sync rc.d scripts
+# 6. sync rc.d scripts
 install -d -m755 "$RCD"
 for f in "$SELF_DIR/etc/rc.d"/*; do
 	install -m755 "$f" "$RCD/$(basename "$f")"
 done
 say "synced $RCD ($(ls "$RCD" | wc -l) scripts)"
 
-# 6. grub
+# 7. grub
 if [ -f /boot/grub/grub.cfg ] && [ -d /etc/grub.d ]; then
 	ans=$(ask "update grub with init=/sbin/cinit?" "yes")
 	if [ "$ans" = "yes" ] || [ "$ans" = "y" ]; then
