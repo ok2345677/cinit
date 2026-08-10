@@ -1,14 +1,14 @@
 #!/bin/sh
 # cinit installer: build, install as /sbin/init, pick services, sync GRUB.
+# Portable: works on Alpine, Chimera, KISS, Void, Gentoo and other Linux distros.
 set -u
 
 SELF="$0"
 SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 CC=${CC:-}
-CFLAGS=${CFLAGS:--O2 -s -static}
+INIT=/sbin/cinit
 CONF=/etc/rc.conf
 RCD=/etc/rc.d
-INIT=/sbin/cinit
 
 say() { printf '\033[1;34m[cinit]\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31m[cinit] error:\033[0m %s\n' "$*" >&2; exit 1; }
@@ -18,23 +18,27 @@ ask() { printf '%s [%s]: ' "$1" "$2" >&2; read -r ans; echo "${ans:-$2}"; }
 
 say "cinit installer in $SELF_DIR"
 
-# 1. pick compiler
-defcc=$(command -v gcc >/dev/null 2>&1 && echo gcc || echo cc)
-cc=$(ask "which compiler to choose?" "$defcc")
-case "$cc" in
-	gcc|clang|cc) ;;
-	*) die "unknown compiler: $cc" ;;
-esac
+# 1. pick compiler (default: $CC, then cc, then gcc, then clang)
+if [ -z "$CC" ]; then
+	for c in cc gcc clang; do
+		if command -v "$c" >/dev/null 2>&1; then CC=$c; break; fi
+	done
+fi
+cc=$(ask "which compiler?" "$CC")
 command -v "$cc" >/dev/null 2>&1 || die "compiler '$cc' not found"
 say "compiler: $cc"
 
-# 2. build
-ans=$(ask "build cinit from source?" "yes")
-if [ "$ans" = "yes" ] || [ "$ans" = "y" ]; then
-	$cc $CFLAGS -o "$SELF_DIR/cinit" "$SELF_DIR/cinit.c" \
-		|| die "build failed"
-	say "built: $SELF_DIR/cinit"
+# 2. build (prefer static, fall back to dynamic if static libc missing)
+build() { $cc $CFLAGS -o "$SELF_DIR/cinit" "$SELF_DIR/cinit.c" "$@"; }
+if build -static 2>/dev/null; then
+	STATIC=yes
+elif build; then
+	STATIC=no
+	say "warning: static build failed, using dynamic (needs libc on rootfs)"
+else
+	die "build failed (run 'make' to see errors)"
 fi
+[ "$STATIC" = yes ] && say "built static: $SELF_DIR/cinit" || say "built dynamic: $SELF_DIR/cinit"
 
 # 3. install binary
 ans=$(ask "install binary as $INIT (and /sbin/init)?" "yes")
@@ -50,7 +54,7 @@ echo "available services in $SELF_DIR/etc/rc.d:"
 printf '  '
 ls "$SELF_DIR/etc/rc.d" | tr '\n' ' '
 echo; echo
-svc=$(ask "services to enable (space-separated)?" "dbus seatd udevd")
+svc=$(ask "services to enable (space-separated)?" "dbus seatd tty")
 [ -n "$svc" ] || die "no services chosen"
 
 for s in $svc; do
@@ -58,9 +62,9 @@ for s in $svc; do
 done
 say "will start: $svc"
 
-# 5. write /etc/rc.conf
+# 5. write /etc/rc.conf (cinit reads SERVICES directly)
 tmp=$(mktemp) || die "mktemp failed"
-printf '#!/bin/sh\nSERVICES="%s"\nfor svc in $SERVICES; do\n\t/etc/rc.d/$svc start\ndone\n' "$svc" > "$tmp"
+printf '#!/bin/sh\nSERVICES="%s"\n' "$svc" > "$tmp"
 install -m755 "$tmp" "$CONF"
 rm -f "$tmp"
 say "wrote $CONF: SERVICES=\"$svc\""
@@ -72,15 +76,14 @@ for f in "$SELF_DIR/etc/rc.d"/*; do
 done
 say "synced $RCD ($(ls "$RCD" | wc -l) scripts)"
 
-# 7. grub
-if [ -f /boot/grub/grub.cfg ] && [ -d /etc/grub.d ]; then
+# 7. bootloader: GRUB or syslinux/limine handled via config files
+if [ -d /etc/grub.d ] && command -v grub-mkconfig >/dev/null 2>&1; then
 	ans=$(ask "update grub with init=/sbin/cinit?" "yes")
 	if [ "$ans" = "yes" ] || [ "$ans" = "y" ]; then
 		if ! grep -qs 'cinit' /etc/grub.d/40_custom; then
 			die "add cinit entry to /etc/grub.d/40_custom manually"
 		fi
-		grub-mkconfig -o /boot/grub/grub.cfg \
-			|| die "grub-mkconfig failed"
+		grub-mkconfig -o /boot/grub/grub.cfg || die "grub-mkconfig failed"
 		say "grub.cfg regenerated"
 	fi
 fi

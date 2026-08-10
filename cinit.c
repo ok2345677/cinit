@@ -1,4 +1,4 @@
-#define _GNU_SOURCE
+#define _DEFAULT_SOURCE
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -24,14 +24,14 @@ static void onsig(int s) { halt(s == SIGINT); }
 static void readconf(void)
 {
 	FILE *f = fopen("/etc/rc.conf", "r");
-	char line[256];
+	char line[256], *p, *tok;
 	if (!f) return;
 	while (fgets(line, sizeof line, f)) {
-		char *p = strstr(line, "SERVICES=");
+		p = strstr(line, "SERVICES=");
 		if (!p) continue;
 		p += 9;
 		if (*p == '"' || *p == '\'') p++;
-		char *tok = strtok(p, " \t\"'\n");
+		tok = strtok(p, " \t\"'\n");
 		while (tok && nsvc < MAXSVC) {
 			strncpy(svc[nsvc++], tok, NAMLEN-1);
 			tok = strtok(NULL, " \t\"'\n");
@@ -47,7 +47,7 @@ static void spawn(int i)
 	pid_t p = fork();
 	if (!p) {
 		snprintf(path, sizeof path, "/etc/rc.d/%s", svc[i]);
-		execl("/bin/sh", "sh", path, "start", NULL);
+		execl("/bin/sh", "sh", path, "start", (char*)0);
 		_exit(127);
 	}
 	pid[i] = p;
@@ -55,6 +55,8 @@ static void spawn(int i)
 
 int main(void)
 {
+	int i, st;
+	setenv("PATH", "/sbin:/usr/sbin:/bin:/usr/bin", 1);
 	signal(SIGINT, onsig), signal(SIGUSR1, onsig), signal(SIGTERM, onsig);
 	M("proc", "/proc", "proc", MS_NOSUID|MS_NOEXEC|MS_NODEV, 0);
 	M("sysfs", "/sys", "sysfs", MS_NOSUID|MS_NOEXEC|MS_NODEV, 0);
@@ -65,15 +67,14 @@ int main(void)
 	M("shm", "/dev/shm", "tmpfs", MS_NOSUID|MS_NODEV, "mode=1777");
 	M(NULL, "/", NULL, MS_REMOUNT, 0);
 	M("tmpfs", "/tmp", "tmpfs", MS_NOSUID|MS_NODEV, 0);
-	M("/dev/sda1", "/boot/efi", "vfat", 0, 0);
-	{ pid_t p = fork(); if (!p) { execl("/usr/bin/swapon","swapon","-a",NULL); _exit(127); } while (waitpid(p,NULL,0)<0&&errno==EINTR); }
+	{ pid_t p = fork(); if (!p) { execl("/bin/sh","sh","-c","mount -a",(char*)0); _exit(127); } while (waitpid(p,NULL,0)<0&&errno==EINTR); }
+	{ pid_t p = fork(); if (!p) { execlp("swapon","swapon","-a",(char*)0); _exit(127); } while (waitpid(p,NULL,0)<0&&errno==EINTR); }
 	readconf();
-	for (int i = 0; i < nsvc; i++) spawn(i);
+	for (i = 0; i < nsvc; i++) spawn(i);
 	for (;;) {
-		int st;
 		pid_t p = waitpid(-1, &st, 0);
 		if (p <= 0) { if (errno == EINTR) continue; sleep(1); continue; }
-		for (int i = 0; i < nsvc; i++) if (pid[i] == p) {
+		for (i = 0; i < nsvc; i++) if (pid[i] == p) {
 			if (WIFEXITED(st) && WEXITSTATUS(st) == 0) {
 				fprintf(stderr, "cinit: %s done\n", svc[i]);
 				pid[i] = 0;
