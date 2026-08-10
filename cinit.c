@@ -33,7 +33,9 @@ static void readconf(void)
 		if (*p == '"' || *p == '\'') p++;
 		tok = strtok(p, " \t\"'\n");
 		while (tok && nsvc < MAXSVC) {
-			strncpy(svc[nsvc++], tok, NAMLEN-1);
+			strncpy(svc[nsvc], tok, NAMLEN-1);
+			svc[nsvc][NAMLEN-1] = '\0';
+			nsvc++;
 			tok = strtok(NULL, " \t\"'\n");
 		}
 		break;
