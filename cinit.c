@@ -16,10 +16,51 @@
 static char svc[MAXSVC][NAMLEN];
 static pid_t pid[MAXSVC];
 static int nsvc;
+static volatile sig_atomic_t act = -1; /* -1 idle, 0 poweroff, 1 reboot */
+static volatile sig_atomic_t stopping;
 
 #define M(s,t,f,fl,d) if (mount(s,t,f,fl,d)<0) fprintf(stderr,"cinit: %s: %s\n",t,strerror(errno))
-static void halt(int r) { sync(); reboot(r ? RB_AUTOBOOT : RB_POWER_OFF); for (;;) pause(); }
-static void onsig(int s) { halt(s == SIGINT); }
+
+/* async-signal-safe: only set a flag, real work happens in the main loop */
+static void onsig(int s) { act = (s == SIGINT) ? 1 : 0; }
+
+static void run(const char *cmd, char *const argv[])
+{
+	pid_t p = fork();
+	if (p == 0) { execv(cmd, argv); _exit(127); }
+	while (waitpid(p, NULL, 0) < 0 && errno == EINTR);
+}
+
+static void stop_svc(void)
+{
+	int i, t;
+	stopping = 1;
+	for (i = 0; i < nsvc; i++)
+		if (pid[i] > 1) kill(-pid[i], SIGTERM);
+	for (t = 0; t < 20; t++) {
+		int alive = 0;
+		for (i = 0; i < nsvc; i++) if (pid[i] > 1) alive++;
+		if (!alive) break;
+		sleep(1);
+	}
+	for (i = 0; i < nsvc; i++)
+		if (pid[i] > 1) kill(-pid[i], SIGKILL);
+}
+
+static void halt(int r)
+{
+	char *sh[] = { "sh", "-c", "umount -a -r", NULL };
+	char *mo[] = { "mount", "-o", "remount,ro", "/", NULL };
+	char *so[] = { "swapoff", "-a", NULL };
+	stop_svc();
+	sync();
+	run("/bin/sh", sh);
+	run("/sbin/swapoff", so);
+	run("/bin/mount", mo);
+	sync();
+	reboot(r ? RB_AUTOBOOT : RB_POWER_OFF);
+	for (;;) pause();
+}
 
 static void readconf(void)
 {
@@ -48,6 +89,7 @@ static void spawn(int i)
 	char path[NAMLEN+12];
 	pid_t p = fork();
 	if (!p) {
+		setpgid(0, 0);
 		snprintf(path, sizeof path, "/etc/rc.d/%s", svc[i]);
 		execl("/bin/sh", "sh", path, "start", (char*)0);
 		_exit(127);
@@ -74,8 +116,10 @@ int main(void)
 	readconf();
 	for (i = 0; i < nsvc; i++) spawn(i);
 	for (;;) {
+		if (act >= 0) { int r = act; act = -1; halt(r); }
 		pid_t p = waitpid(-1, &st, 0);
 		if (p <= 0) { if (errno == EINTR) continue; sleep(1); continue; }
+		if (stopping) continue;
 		for (i = 0; i < nsvc; i++) if (pid[i] == p) {
 			if (WIFEXITED(st) && WEXITSTATUS(st) == 0) {
 				fprintf(stderr, "cinit: %s done\n", svc[i]);
