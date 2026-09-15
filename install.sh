@@ -24,8 +24,9 @@ if [ -z "$CC" ]; then
 	for c in cc gcc clang; do
 		if command -v "$c" >/dev/null 2>&1; then CC=$c; break; fi
 	done
+	[ -n "$CC" ] || die "no compiler found. install one first: alpine: apk add gcc musl-dev make; void: xbps-install gcc make; arch: pacman -S gcc make"
 fi
-cc=$(ask "which compiler?" "$CC")
+cc=$(ask "which compiler? (found: $CC)" "$CC")
 command -v "$cc" >/dev/null 2>&1 || die "compiler '$cc' not found"
 say "compiler: $cc"
 
