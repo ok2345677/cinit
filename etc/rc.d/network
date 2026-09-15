@@ -1,9 +1,25 @@
 #!/bin/sh
-# network — сеть: loopback + dhcpcd на всех интерфейсах
-#  Arch/systemd:  systemctl enable --now dhcpcd.service (или systemd-networkd)
-#  Void:          dhcpcd пакет
+# network — сети: поднять lo + dhcpcd на всех интерфейсах
+#
+#  Универсально: загружает ВСЕ сетевые драйверы, чтобы сеть работала
+#  на любой машине/виртуалке (QEMU, VMware, VirtualBox, real-железо):
+#    virtio_net     — QEMU/KVM virtio
+#    e1000 e1000e   — QEMU default + VMware legacy
+#    vmxnet3        — VMware default (если модуль есть)
+#    r8169          — Realtek PCIe (реальный желез)
+#    8139cp 8139too — Realtek 8139 (QEMU rtl8139)
+#    pcnet32        — QEMU/VMware pcnet (am79c97x)
+#    ne2k_pci       — QEMU ne2k
+#    tg3 bnx2 ixgbe igb mlx4_core e1000e — серверные/встраиваемые
+#    ath9k iwlwifi ath10k_pci mt76 — wifi
+#  modprobe -q: ошибка на отсутствующий модуль не роняет скрипт.
+#  systemd-дисты: systemctl enable --now dhcpcd.service
+#  (модули удобнее грузить через /etc/modules-load.d/ + modules-load)
 case $1 in
 start)
+	for m in virtio_net e1000 e1000e vmxnet3 r8169 8139cp 8139too pcnet32 ne2k_pci tg3 bnx2 ixgbe igb mlx4_core ath9k iwlwifi ath10k_pci mt76; do
+		modprobe -q -a "$m" 2>/dev/null
+	done
 	/usr/bin/ip link set lo up
 	exec /usr/bin/dhcpcd -q -b
 	;;
