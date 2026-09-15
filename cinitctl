@@ -1,0 +1,63 @@
+#!/bin/sh
+# cinitctl — управление сервисами cinit (аналог systemctl)
+#   status                     — таблица сервисов: имя, состояние, политика
+#   list                       — то же, но с логами на stderr
+#   start NAME | stop NAME
+#   restart NAME
+#   log NAME [N]               — хвост журнала N строк (default 50)
+#   enable NAME                — добавить в /etc/rc.conf SERVICES
+#   disable NAME               — убрать
+#   poweroff | reboot          — выключение/перезагрузка (через cinit)
+set -u
+
+CTL=/var/run/cinit/ctl
+STF=/var/run/cinit/status
+CONF=/etc/rc.conf
+LOG=/var/log/cinit
+
+[ -w /var/run ] || { echo "cinitctl: run as root (doas)" >&2; exit 1; }
+[ -p "$CTL" ]  || { echo "cinitctl: cinit not running? ($CTL missing)" >&2; exit 1; }
+
+cmd() { printf '%s\n' "$*" > "$CTL"; }
+
+status()
+{
+	[ -f "$STF" ] || { echo "cinitctl: no status yet (cinit started?)" >&2; return 1; }
+	awk '{printf "%-18s %-12s %s\n", $1, $2, $3}' "$STF"
+}
+
+case "${1:-}" in
+status|list)
+	[ "$1" = list ] && echo "# name  state  restart-policy"
+	status
+	;;
+start|stop|restart)
+	[ $# -eq 2 ] || { echo "usage: cinitctl $1 NAME" >&2; exit 1; }
+	cmd "$1 $2"
+	sleep 0.2; status | grep -w "$2" || true
+	;;
+log)
+	name=${2:-}; n=${3:-50}
+	[ -n "$name" ] || { echo "usage: cinitctl log NAME [N]" >&2; exit 1; }
+	[ -f "$LOG/$name.log" ] || { echo "cinitctl: no log for $name" >&2; exit 1; }
+	tail -n "$n" "$LOG/$name.log"
+	;;
+enable)
+	[ $# -eq 2 ] || { echo "usage: cinitctl enable NAME" >&2; exit 1; }
+	grep -qw "$2" "$CONF" && { echo "cinitctl: $2 already enabled" >&2; exit 0; }
+	sed -i "s/^SERVICES=\"\(.*\)\"/SERVICES=\"\1 $2\"/" "$CONF"
+	echo "cinitctl: enabled $2 (apply: restart or reboot)"
+	;;
+disable)
+	[ $# -eq 2 ] || { echo "usage: cinitctl disable NAME" >&2; exit 1; }
+	sed -i "s/^SERVICES=\"\(.*\) $2\(.*\)\"/SERVICES=\"\1\2\"/; s/^SERVICES=\"$2\(.*\)\"/SERVICES=\"\1\"/; s/  */ /g" "$CONF"
+	echo "cinitctl: disabled $2"
+	;;
+poweroff|reboot)
+	cmd "$1"
+	;;
+*)
+	echo "usage: cinitctl status|list|start|stop|restart|log|enable|disable|poweroff|reboot" >&2
+	exit 1
+	;;
+esac
