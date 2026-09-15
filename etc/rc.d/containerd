@@ -1,4 +1,7 @@
 #!/bin/sh
+# containerd — контейнерный рантайм (низ docker)
+#  Arch/systemd:  systemctl enable --now containerd.service
+#  Void:          containerd пакет (docker тянет его сам)
 case $1 in
 start) exec containerd ;;
 stop) pkill containerd ;;

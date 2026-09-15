@@ -1,4 +1,8 @@
 #!/bin/sh
+# seatd — менеджер сиди-устройств (Wayland/сессии без root)
+#  Arch:          НЕ нужен — systemd-logind делает это; если нужен:
+#                 systemctl enable --now seatd.service
+#  Void/Alpine:   seatd пакет (для sway, cage и т.п.)
 case $1 in
 start) exec /usr/bin/seatd ;;
 stop) pkill seatd ;;

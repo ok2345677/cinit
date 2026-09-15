@@ -1,4 +1,8 @@
 #!/bin/sh
+# bluetoothd — Bluetooth-стек
+#  Arch/systemd:  systemctl enable --now bluetooth.service
+#  Void:          bluez пакет; путь Arch: /usr/lib/bluetooth/bluetoothd,
+#                 Gentoo/мусл: /usr/libexec/bluetooth/bluetoothd
 case $1 in
 start) exec /usr/libexec/bluetooth/bluetoothd -n ;;
 stop) pkill bluetoothd ;;

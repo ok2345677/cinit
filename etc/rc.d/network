@@ -1,4 +1,7 @@
 #!/bin/sh
+# network — сеть: loopback + dhcpcd на всех интерфейсах
+#  Arch/systemd:  systemctl enable --now dhcpcd.service (или systemd-networkd)
+#  Void:          dhcpcd пакет
 case $1 in
 start)
 	/usr/bin/ip link set lo up

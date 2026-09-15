@@ -1,4 +1,7 @@
 #!/bin/sh
+# redis — in-memory БД
+#  Arch/systemd:  systemctl enable --now redis.service
+#  Void:          redis пакет; юзер redis создан пакетом
 case $1 in
 start)
 	install -d -m0750 -o redis -g redis /run/redis

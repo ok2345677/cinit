@@ -1,4 +1,7 @@
 #!/bin/sh
+# mysqld — MariaDB/MySQL сервер
+#  Arch/systemd:  systemctl enable --now mysqld.service (mariadb пакет)
+#  Void:          mariadb пакет; юзер mysql создан пакетом
 case $1 in
 start)
 	[ ! -d /run/mysqld ] && mkdir -p /run/mysqld

@@ -1,4 +1,7 @@
 #!/bin/sh
+# smartd — SMART-мониторинг дисков
+#  Arch/systemd:  systemctl enable --now smartd.service
+#  Void:          smartmontools пакет
 case $1 in
 start) exec smartd -n ;;
 stop) pkill smartd ;;

@@ -1,4 +1,7 @@
 #!/bin/sh
+# hostname — имя хоста из /etc/hostname + ping_group_range (для не-root ping)
+#  Arch/systemd:  systemd-hostnamed.service; /etc/hostname читает systemd сам
+#  Void:          этот скрипт
 case $1 in
 start)
 	cat /etc/hostname > /proc/sys/kernel/hostname

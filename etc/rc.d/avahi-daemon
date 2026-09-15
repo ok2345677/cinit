@@ -1,4 +1,7 @@
 #!/bin/sh
+# avahi-daemon — mDNS/DNS-SD (локальные .local имена)
+#  Arch/systemd:  systemctl enable --now avahi-daemon.service
+#  Void:          avahi пакет, этот скрипт
 case $1 in
 start) exec avahi-daemon -s ;;
 stop) pkill avahi-daemon ;;

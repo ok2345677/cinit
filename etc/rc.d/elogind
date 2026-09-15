@@ -1,4 +1,7 @@
 #!/bin/sh
+# elogind — logind без systemd (сессии/питание для X11/Wayland)
+#  Arch:          logind ВСТРОЕН в systemd — elogind НЕ нужен
+#  Void/Gentoo:   elogind пакет (на dbus-магистраль ждёт шину)
 case $1 in
 start)
 	i=0

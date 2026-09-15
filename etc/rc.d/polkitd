@@ -1,4 +1,8 @@
 #!/bin/sh
+# polkitd — PolicyKit (разрешения для непривилегированных процессов)
+#  Arch/systemd:  systemctl enable --now polkit.service
+#  Void:          polkit пакет (запускается сам через dbus-activation,
+#                 этот скрипт — принудительный ранний старт)
 case $1 in
 start) exec /usr/lib/polkit-1/polkitd --no-debug ;;
 stop) pkill polkitd ;;

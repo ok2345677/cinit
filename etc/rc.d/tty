@@ -1,4 +1,8 @@
 #!/bin/sh
+# tty — виртуальные терминалы (agetty): tty1 автоматин-login vova, tty2 обычный
+#  Arch/systemd:  systemctl enable --now getty@tty1.service (автологин:
+#                 /etc/systemd/system/getty@tty1.service.d/autologin.conf)
+#  Void:          изменить юзера vova -> твой; uid 1000 тем же
 case $1 in
 start)
 	mkdir -p /run/user/1000
