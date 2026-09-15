@@ -1,15 +1,39 @@
 #!/bin/sh
-# udevd — устройство-менеджер (devtmpfs + hotplug)
+# udevd — устройство-менеджер (hotplug, devtmpfs)
 #
-#  Void (eudev):    /usr/libexec/eudev/udevd      [*] установлено
-#  Arch (systemd):  /usr/lib/systemd/systemd-udevd — НЕ использовать,
-#                   ставить как systemd-сервис (systemd-udevd.service)
-#  Gentoo (eudev):  /usr/libexec/eudev/udevd
+# Автоопределение: mdev → eudev → systemd-udevd
+#  busybox mdev:  /sbin/mdev (алpine, kiss, minimal)
+#  eudev:        /usr/libexec/eudev/udevd (void, gentoo)
+#  systemd:      /usr/lib/systemd/systemd-udevd (arch, fedora — НЕ использовать,
+#                ставить systemd-udevd.service)
+#
+# Ручной выбор: раскомментировать нужный блок в case start)
 case $1 in
 start)
-	/usr/libexec/eudev/udevd &
-	( sleep 1; udevadm trigger --action=add --type=subsystems; udevadm trigger --action=add --type=devices; udevadm settle --timeout=30 ) &
+	if command -v mdev >/dev/null 2>&1; then
+		# busybox mdev (минимально, 0 зависимостей)
+		echo '/sbin/mdev' > /proc/sys/kernel/hotplug
+		exec mdev -s
+	elif [ -x /usr/libexec/eudev/udevd ]; then
+		# eudev (void, gentoo, alpine-community)
+		/usr/libexec/eudev/udevd &
+		udevadm trigger --action=add --type=subsystems
+		udevadm trigger --action=add --type=devices
+		udevadm settle --timeout=30
+	else
+		# systemd-udevd (arch, fedora) — не рекомендуется
+		/usr/lib/systemd/systemd-udevd &
+		udevadm trigger --action=add --type=subsystems
+		udevadm trigger --action=add --type=devices
+		udevadm settle --timeout=30
+	fi
 	wait
 	;;
-stop) pkill -f eudev/udevd ;;
+stop)
+	if command -v mdev >/dev/null 2>&1; then
+		kill $(cat /dev/mdev.seq 2>/dev/null) 2>/dev/null
+	else
+		pkill -f udevd
+	fi
+	;;
 esac
