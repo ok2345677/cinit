@@ -1,0 +1,86 @@
+#!/bin/sh
+# firewall — nftables (предпочитается) или iptables-nft/iptables-legacy.
+#   Кроссплатформенно: работает на Alpine (nft), Void (nft), Arch/Artix (nft),
+#   Gentoo (nft/iptables), Debian/Devuan (nft). 
+#   systemd-дистры: systemctl enable --now nftables.service (правила в
+#   /etc/nftables.conf).
+#
+# БЕЗОПАСНЫЙ ДЕФОЛТ: никогда не блокирует установленные соединения и SSH(22).
+# Политика: input=drop, output=accept, forward=drop. Позволяет: loopback,
+# established/related, SSH 22, ping (icmp echo), mDNS/LLMNR локально.
+#
+# Быстрый старт:
+#   printf '%s\n' "#!/bin/sh" 'exec /sbin/nft -f /etc/cinit.nft' > /etc/cinit-firewall
+#   chmod +x /etc/cinit-firewall
+#   echo firewall >> /etc/rc.conf
+
+F=/etc/cinit-firewall	# внешний конфиг-скрипт (необязателен)
+
+nft_rules()
+{
+	nft -f - <<'EOF'
+table inet cinit {
+	chain input {
+		type filter hook input priority 0; policy drop;
+		ct state established,related accept
+		iif lo accept
+		tcp dport 22 accept
+		icmp type echo-request accept
+		icmpv6 type echo-request accept
+		ip6 nexthdr icmpv6 icmpv6 type { nd-neighbor-solicit, nd-neighbor-advertise, nd-router-solicit, nd-router-advertise } accept
+		udp dport 5353 accept
+	}
+	chain forward {
+		type filter hook forward priority 0; policy drop;
+	}
+	chain output {
+		type filter hook output priority 0; policy accept;
+	}
+}
+EOF
+}
+
+ipt_rules()
+{
+	iptables -F; iptables -X; iptables -t nat -F 2>/dev/null; iptables -t mangle -F 2>/dev/null
+	ip6tables -F 2>/dev/null; ip6tables -X 2>/dev/null
+	iptables -P INPUT DROP
+	iptables -P FORWARD DROP
+	iptables -P OUTPUT ACCEPT
+	iptables -A INPUT -i lo -j ACCEPT
+	iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+	iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+	iptables -A INPUT -p icmp --icmp-type echo-request -j ACCEPT
+	if command -v ip6tables >/dev/null 2>&1; then
+		ip6tables -P INPUT DROP; ip6tables -P FORWARD DROP; ip6tables -P OUTPUT ACCEPT
+		ip6tables -A INPUT -i lo -j ACCEPT
+		ip6tables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+		ip6tables -A INPUT -p tcp --dport 22 -j ACCEPT
+		ip6tables -A INPUT -p icmpv6 --icmpv6-type echo-request -j ACCEPT
+	fi
+}
+
+case $1 in
+start)
+	if [ -x "$F" ]; then
+		"$F" || die=$(echo "external $F failed")
+	elif command -v nft >/dev/null 2>&1; then
+		nft_rules || die="nft failed"
+	elif command -v iptables >/dev/null 2>&1; then
+		ipt_rules || die="iptables failed"
+	else
+		die="no firewall tool (install nftables)"
+	fi
+	[ -z "$die" ] || { echo "[firewall] $die" >&2; exit 1; }
+	echo "[firewall] protected (input drop, ssh open)"
+	;;
+stop)
+	if command -v nft >/dev/null 2>&1; then
+		nft delete table inet cinit 2>/dev/null
+	else
+		iptables -P INPUT ACCEPT; iptables -F; iptables -X
+		ip6tables -P INPUT ACCEPT 2>/dev/null; ip6tables -F 2>/dev/null; ip6tables -X 2>/dev/null
+	fi
+	echo "[firewall] flushed (all open)"
+	;;
+esac
