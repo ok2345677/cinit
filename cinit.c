@@ -29,7 +29,7 @@ static void g(void){FILE*f = fopen("/etc/rc.conf", "r"); char l[256], *t; int i;
 	if (!f) return;
 	while (fgets(l, 256, f)){ if ((t = strstr(l, "SERVICES="))){ t += 9; while ((t = strtok(t, " \t\"'\n")) && n < A){ strncpy(v[n], t, 63); v[n][63] = 0; strcpy(q[n], "onfail"); n++; t = 0; } break; } }
 	fclose(f);
-	for (i = 0; i < n; i++){ char k[80], val[16]; FILE*ff = fopen("/etc/rc.conf", "r"); if (!ff) continue; snprintf(k, 80, "%s_restart=", v[i]); while (fgets(l, 256, ff)){ if (strstr(l, k)){ sscanf(l + strlen(k), "%15s", val); if (!strcmp(val, "always") || !strcmp(val, "once")) strcpy(q[i], val); } } fclose(ff); }
+	for (i = 0; i < n; i++){ char k[96], val[16]; FILE*ff = fopen("/etc/rc.conf", "r"); if (!ff) continue; snprintf(k, sizeof k, "%.63s_restart=", v[i]); while (fgets(l, 256, ff)){ if (strstr(l, k)){ sscanf(l + strlen(k), "%15s", val); if (!strcmp(val, "always") || !strcmp(val, "once")) strcpy(q[i], val); } } fclose(ff); }
 	st();}
 static void z(int i){pid_t qq = fork(); if (!qq){char c[80], lg[128]; int fd; setpgid(0, 0);
 		snprintf(c, 80, "/etc/rc.d/%s", v[i]); snprintf(lg, 128, L "/%s.log", v[i]);
@@ -42,10 +42,11 @@ static void cc(char*b){char*cmd, *arg; int i; cmd = strtok(b, " \t\n"); arg = st
 	if (!strcmp(cmd, "start")){ for (i = 0; i < n; i++) if (!strcmp(v[i], arg)){ if (p[i] <= 1) z(i); return; } return; }
 	if (!strcmp(cmd, "stop")){ for (i = 0; i < n; i++) if (!strcmp(v[i], arg)){ so(i); return; } return; }
 	if (!strcmp(cmd, "restart")){ for (i = 0; i < n; i++) if (!strcmp(v[i], arg)){ so(i); z(i); return; } return; }
-	if (!strcmp(cmd, "log")){ for (i = 0; i < n; i++) if (!strcmp(v[i], arg)){ char c[160]; snprintf(c, 160, "tail -n 50 " L "/%s.log", v[i]); w("/bin/sh", (char*[]){"sh", "-c", c, 0}); return; } return; }
+	if (!strcmp(cmd, "log")){ for (i = 0; i < n; i++) if (!strcmp(v[i], arg)){ char lc[160]; snprintf(lc, sizeof lc, "tail -n 50 " L "/%.63s.log", v[i]); w("/bin/sh", (char*[]){"sh", "-c", lc, 0}); return; } return; }
 	if (!strcmp(cmd, "poweroff") || !strcmp(cmd, "reboot")){ h(!strcmp(cmd, "reboot")); } }
 static void ctl(void){int fd = open(C, O_RDONLY|O_NONBLOCK); char b[256]; ssize_t r;
-	if (fd < 0) return; r = read(fd, b, sizeof(b) - 1); close(fd);
+	if (fd < 0) return;
+	r = read(fd, b, sizeof(b) - 1); close(fd);
 	if (r > 0){ b[r] = 0; cc(b); } }
 static void setup(void){mkdir("/run", 0755); mkdir(L, 0755); mkdir(R, 0755); unlink(C); mkfifo(C, 0666); chmod(C, 0666);}
 int main(void){int i, s, st2; setenv("PATH", "/sbin:/usr/sbin:/bin:/usr/bin", 1); signal(SIGINT, x); signal(SIGUSR1, x); signal(SIGTERM, x);

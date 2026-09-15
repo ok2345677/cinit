@@ -7,7 +7,7 @@
 # distro lacks static libc, run: make STATIC=0
 
 CC     ?= cc
-CFLAGS ?= -O2 -Wall -Wextra
+CFLAGS ?= -O2 -Wall -Wextra -Werror
 STATIC ?= 1
 
 PREFIX ?= /usr/local
