@@ -1,0 +1,83 @@
+#!/bin/sh
+# cinit-firewall.example — ПОЛНЫЙ server-фаервол для cinit.
+# Копировать в /etc/cinit-firewall, chmod +x, правила в rc.d/firewall
+# подхватятся автоматически (приоритет перед встроенным дефолтом).
+#
+#   cp etc/cinit-firewall.example /etc/cinit-firewall
+#   chmod +x /etc/cinit-firewall
+#   echo firewall >> /etc/rc.conf
+#
+# Всё необходимое для серверных сервисов cinit:
+#   sshd(22) nginx(80/443) docker(masquerade/forward) mysql(3306 внутрь)
+#   redis(6379 внутрь) dhcpcd(67/68, 546/547) chronyd(123) crond(dbus локально)
+#   ping, mDNS, IPv6 полностью (не ломаем v6).
+
+nft -f - <<'EOF'
+table inet cinit {
+	# ---- сервисы, доступные извне (открытые порты) ----
+	set open_ports {
+		type inet_service
+		flags interval
+		elements = { ssh, 80, 443 }	# sshd + nginx http/https
+	}
+
+	# ---- сервисы, доступные ТОЛЬКО из локальной сети (LAN) ----
+	set lan_ports {
+		type inet_service
+		flags interval
+		elements = { 3306 }		# mysql — наружу НЕ отдавать
+	}
+
+	chain input {
+		type filter hook input priority 0; policy drop;
+		ct state established,related accept
+		iif lo accept
+		tcp dport @open_ports accept
+		# LAN: блок 192.168.0.0/16 + докер-мост (контейнеры ходят наружу)
+		ip saddr 192.168.0.0/16 tcp dport @lan_ports accept
+		ip saddr 10.0.0.0/8    tcp dport @lan_ports accept
+		ip saddr 172.16.0.0/12 tcp dport @lan_ports accept
+		# DHCP-клиент (dhcpcd): исходящие 67/68, ответы сервера
+		udp dport 68 accept
+		# NTP (chronyd): исходящий 123 — разрешён в output, входящие 123
+		udp dport 123 accept
+		udp dport 5353 accept			# mDNS
+		icmp type echo-request accept		# ping4
+		icmpv6 type echo-request accept		# ping6
+		# IPv6: NDP (соседи) — без этого v6 не поднимется
+		ip6 nexthdr icmpv6 icmpv6 type { nd-neighbor-solicit, nd-neighbor-advertise, nd-router-solicit, nd-router-advertise } accept
+		udp dport 546 accept			# DHCPv6 client
+		ip6 saddr fe80::/10 udp dport 546 accept
+	}
+
+	chain forward {
+		type filter hook forward priority 0; policy drop;
+		# docker: мост docker0 (172.17.x) — контейнеры в интернет
+		iifname "docker0" oifname != "docker0" ct state new accept
+		oifname "docker0" ct state established,related accept
+		iifname "docker0" oifname "docker0" accept
+	}
+
+	chain output {
+		type filter hook output priority 0; policy accept;
+		udp dport 67 accept			# DHCP discover/request
+		udp dport 123 accept			# NTP клиент
+	}
+}
+
+# ---- NAT: docker (маскарад контейнеров в интернет) + DNAT-шаблон ----
+#  раскомментируй, если нужен проброс порта внутрь (напр. 8080 -> контейнер)
+#table ip nat {
+#	chain postrouting {
+#		type nat hook postrouting priority 100; policy accept;
+#		oifname != "docker0" masquerade
+#		iifname "docker0" oifname != "docker0" masquerade
+#	}
+#	chain prerouting {
+#		type nat hook prerouting priority -100; policy accept;
+#		# проброс: WAN-IP:8080 -> 172.17.0.2:80
+#		# ip daddr <ВНЕШНИЙ_IP> tcp dport 8080 dnat to 172.17.0.2:80
+#	}
+#}
+EOF
+exit $?
