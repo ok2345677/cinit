@@ -1,6 +1,7 @@
 #!/bin/sh
-# cinit installer: build, install as /sbin/init, pick services, sync GRUB.
-# Portable: works on Alpine, Chimera, KISS, Void, Gentoo and other Linux distros.
+# cinit installer: build, install as /sbin/init, pick services, sync bootloader.
+# Portable: works on Alpine (syslinux), KISS (limine), Void/Gentoo/Artix (grub),
+# Arch (mkinitcpio+grub), Chimera and other Linux distros.
 set -u
 
 SELF="$0"
@@ -76,16 +77,43 @@ for f in "$SELF_DIR/etc/rc.d"/*; do
 done
 say "synced $RCD ($(ls "$RCD" | wc -l) scripts)"
 
-# 7. bootloader: GRUB or syslinux/limine handled via config files
+# 7. bootloader: GRUB / syslinux (alpine) / limine (kiss) — auto entry
 if [ -d /etc/grub.d ] && command -v grub-mkconfig >/dev/null 2>&1; then
-	ans=$(ask "update grub with init=/sbin/cinit?" "yes")
+	ans=$(ask "add init=/sbin/cinit to grub (40_custom)?" "yes")
 	if [ "$ans" = "yes" ] || [ "$ans" = "y" ]; then
 		if ! grep -qs 'cinit' /etc/grub.d/40_custom; then
-			die "add cinit entry to /etc/grub.d/40_custom manually"
+			printf 'menuentry "cinit" {\n\tlinux /boot/vmlinuz-linux root=%s init=/sbin/cinit\n}\n' \
+				"$(findmnt -no SOURCE / 2>/dev/null || echo /dev/sda1)" >> /etc/grub.d/40_custom
 		fi
 		grub-mkconfig -o /boot/grub/grub.cfg || die "grub-mkconfig failed"
-		say "grub.cfg regenerated"
+		say "grub.cfg regenerated (init=/sbin/cinit)"
 	fi
+elif [ -f /etc/limine.cfg ]; then
+	ans=$(ask "add init=/sbin/cinit to limine?" "yes")
+	if [ "$ans" = "yes" ] || [ "$ans" = "y" ]; then
+		if ! grep -qs 'cinit' /etc/limine.cfg; then
+			printf '\n:cinit\n\tKERNEL=/boot/vmlinuz-linux\n\tCMDLINE=root=%s init=/sbin/cinit\n' \
+				"$(findmnt -no SOURCE / 2>/dev/null || echo /dev/sda1)" >> /etc/limine.cfg
+		fi
+		limine-mkinitramfs >/dev/null 2>&1 || true
+		say "limine.cfg updated (init=/sbin/cinit)"
+	fi
+elif [ -f /boot/extlinux/extlinux.conf ]; then
+	ans=$(ask "add init=/sbin/cinit to syslinux (extlinux)?" "yes")
+	if [ "$ans" = "yes" ] || [ "$ans" = "y" ]; then
+		sed -i "s/^TIMEOUT.*/TIMEOUT 50/" /boot/extlinux/extlinux.conf
+		if ! grep -qs 'cinit' /boot/extlinux/extlinux.conf; then
+			cat >> /boot/extlinux/extlinux.conf << EOF
+LABEL cinit
+	LINUX /vmlinuz-lts
+	INITRD /initramfs-lts
+	APPEND root=$(findmnt -no SOURCE / 2>/dev/null || echo /dev/sda1) init=/sbin/cinit
+EOF
+		fi
+		say "extlinux.conf updated (init=/sbin/cinit)"
+	fi
+else
+	say "bootloader not detected; add 'init=/sbin/cinit' to your kernel cmdline manually"
 fi
 
 say "done. reboot with init=/sbin/cinit"
